@@ -44,6 +44,21 @@ _client: Any = None
 _configured = False
 
 
+def _parse_connection_string(conn: str) -> tuple[str, str]:
+    """Split an App Insights connection string into (instrumentation_key, ingest_url).
+
+    The legacy ``applicationinsights`` SDK predates connection strings and accepts
+    only a bare instrumentation key, so passing the raw connection string silently
+    posts every event to the wrong endpoint with an invalid key.
+    """
+    parts = dict(
+        kv.split("=", 1) for kv in conn.split(";") if "=" in kv  # noqa: C402
+    )
+    ikey = parts.get("InstrumentationKey", "").strip()
+    endpoint = parts.get("IngestionEndpoint", "https://dc.services.visualstudio.com/").strip()
+    return ikey, endpoint.rstrip("/") + "/v2/track"
+
+
 def configure() -> None:
     """Attach the Azure Monitor exporter once, if configured."""
     global _client, _configured
@@ -54,11 +69,16 @@ def configure() -> None:
     if not conn:
         logger.info("App Insights not configured; using in-process counters only.")
         return
+    ikey, ingest_url = _parse_connection_string(conn)
+    if not ikey:
+        logger.warning("App Insights connection string has no InstrumentationKey; export disabled.")
+        return
     try:
         from applicationinsights import TelemetryClient  # type: ignore
 
-        _client = TelemetryClient(conn)
-        logger.info("Application Insights telemetry enabled.")
+        _client = TelemetryClient(ikey)
+        _client.channel.sender.service_endpoint_uri = ingest_url
+        logger.info("Application Insights telemetry enabled (endpoint=%s).", ingest_url)
     except Exception as exc:  # pragma: no cover - optional dependency
         logger.warning("Could not initialise App Insights: %s", exc)
 

@@ -53,3 +53,25 @@ def test_duration_buffer_is_bounded():
     for _ in range(600):
         telemetry._record_duration("Op", 1.0)
     assert len(telemetry._durations["Op"]) == 500
+
+
+def test_parse_connection_string_extracts_key_and_regional_endpoint():
+    conn = (
+        "InstrumentationKey=11111111-2222-3333-4444-555555555555;"
+        "IngestionEndpoint=https://westus2-0.in.applicationinsights.azure.com/;"
+        "LiveEndpoint=https://westus2.livediagnostics.monitor.azure.com/"
+    )
+    ikey, url = telemetry._parse_connection_string(conn)
+    assert ikey == "11111111-2222-3333-4444-555555555555"
+    assert url == "https://westus2-0.in.applicationinsights.azure.com/v2/track"
+
+
+def test_parse_connection_string_defaults_endpoint_when_absent():
+    ikey, url = telemetry._parse_connection_string("InstrumentationKey=abc")
+    assert ikey == "abc"
+    assert url == "https://dc.services.visualstudio.com/v2/track"
+
+
+def test_parse_connection_string_without_key_disables_export():
+    ikey, _ = telemetry._parse_connection_string("IngestionEndpoint=https://x/")
+    assert ikey == ""
