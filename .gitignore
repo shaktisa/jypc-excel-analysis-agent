@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Local workbook storage (LocalWorkbookStore)
+.data/
+backend/.data/
+
+# Node / Vite
+node_modules/
+dist/
+
+# The SPA is a build artifact, produced by `npm run build` or the Dockerfile.
+backend/app/static/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

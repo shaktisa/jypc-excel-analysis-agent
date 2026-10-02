@@ -1,0 +1,161 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## Excel Analysis Agent — service health\n\nEvery panel below is driven by the custom events emitted from `backend/app/telemetry.py`. Use the time-range control to change the window.\n\n| Event | Meaning |\n|---|---|\n| `WorkbookUploaded` | A spreadsheet was accepted and stored as version 1 |\n| `AnalysisRequested` | Deterministic column profiling ran |\n| `ChartGenerated` | A chart was written into a new workbook version |\n| `ChatTurn` | One agent turn (may contain several tool calls) |\n| `AgentToolCall` | A single tool invocation by the model |\n| `VersionDownloaded` | A user downloaded a workbook version |\n| `OperationFailed` | Any operation that raised |"
+      },
+      "name": "header"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "timerange",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "label": "Time range",
+            "type": 4,
+            "isRequired": true,
+            "value": { "durationMs": 86400000 },
+            "typeSettings": {
+              "selectableValues": [
+                { "durationMs": 3600000 },
+                { "durationMs": 14400000 },
+                { "durationMs": 86400000 },
+                { "durationMs": 604800000 },
+                { "durationMs": 2592000000 }
+              ]
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components"
+      },
+      "name": "parameters"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let window = customEvents\n| where timestamp {TimeRange}\n| extend outcome = tostring(customDimensions.outcome), user = tostring(customDimensions.user_id);\nlet ops = window | where isnotempty(outcome);\nlet total = toscalar(count_of_ops = ops | count);\nunion\n(ops | summarize Value = round(100.0 * countif(outcome == 'success') / count(), 2) | extend Metric = 'Success rate %'),\n(window | summarize Value = todouble(dcount(user)) | extend Metric = 'Distinct users'),\n(ops | summarize Value = todouble(count()) | extend Metric = 'Total operations'),\n(window | where name == 'OperationFailed' | summarize Value = todouble(count()) | extend Metric = 'Failures'),\n(window | where name == 'WorkbookUploaded' | summarize Value = todouble(count()) | extend Metric = 'Workbooks uploaded'),\n(window | where name == 'ChartGenerated' | summarize Value = todouble(count()) | extend Metric = 'Charts generated')\n| project Metric, Value",
+        "size": 3,
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": { "columnMatch": "Metric", "formatter": 1 },
+          "leftContent": {
+            "columnMatch": "Value",
+            "formatter": 12,
+            "formatOptions": { "palette": "auto" },
+            "numberFormat": { "unit": 0, "options": { "maximumFractionDigits": 2 } }
+          },
+          "showBorder": true
+        }
+      },
+      "name": "kpi-tiles"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "customEvents\n| where timestamp {TimeRange}\n| extend outcome = tostring(customDimensions.outcome)\n| where isnotempty(outcome)\n| summarize Succeeded = countif(outcome == 'success'), Failed = countif(outcome == 'failure') by bin(timestamp, 15m)\n| order by timestamp asc",
+        "size": 0,
+        "title": "Operations over time",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "barchart",
+        "chartSettings": { "yAxis": ["Succeeded", "Failed"] }
+      },
+      "customWidth": "50",
+      "name": "ops-over-time"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "customEvents\n| where timestamp {TimeRange}\n| extend user = tostring(customDimensions.user_id)\n| where isnotempty(user)\n| summarize ActiveUsers = dcount(user) by bin(timestamp, 1h)\n| order by timestamp asc",
+        "size": 0,
+        "title": "Active users per hour",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "linechart"
+      },
+      "customWidth": "50",
+      "name": "active-users"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "customEvents\n| where timestamp {TimeRange}\n| extend outcome = tostring(customDimensions.outcome)\n| where isnotempty(outcome)\n| extend duration_ms = todouble(customMeasurements.duration_ms)\n| summarize Calls = count(), ['Success %'] = round(100.0 * countif(outcome == 'success') / count(), 2), ['p50 ms'] = round(percentile(duration_ms, 50), 1), ['p95 ms'] = round(percentile(duration_ms, 95), 1) by Operation = name\n| order by Calls desc",
+        "size": 0,
+        "title": "Per-operation success rate and latency",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Success %",
+              "formatter": 8,
+              "formatOptions": { "palette": "greenRed" }
+            },
+            { "columnMatch": "Calls", "formatter": 4 }
+          ]
+        }
+      },
+      "name": "per-operation"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "customEvents\n| where timestamp {TimeRange}\n| where name == 'AgentToolCall'\n| extend Tool = tostring(customDimensions.tool), outcome = tostring(customDimensions.outcome)\n| summarize Calls = count(), Failures = countif(outcome == 'failure') by Tool\n| order by Calls desc",
+        "size": 0,
+        "title": "Agent tool usage",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "barchart"
+      },
+      "customWidth": "50",
+      "name": "tool-usage"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "customEvents\n| where timestamp {TimeRange}\n| where name == 'OperationFailed'\n| extend Operation = tostring(customDimensions.operation), ErrorType = tostring(customDimensions.error_type), Detail = tostring(customDimensions.error)\n| summarize Count = count(), ['Last seen'] = max(timestamp), Example = any(Detail) by Operation, ErrorType\n| order by Count desc",
+        "size": 0,
+        "title": "Failures by operation and error type",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "table"
+      },
+      "customWidth": "50",
+      "name": "failures"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "requests\n| where timestamp {TimeRange}\n| summarize Requests = count(), Failed = countif(success == false), ['p95 ms'] = round(percentile(duration, 95), 1) by Endpoint = name\n| order by Requests desc\n| take 20",
+        "size": 0,
+        "title": "HTTP endpoints",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "table"
+      },
+      "name": "http"
+    }
+  ],
+  "fallbackResourceIds": [
+    "/subscriptions/1d09b2fc-73dd-4a82-8e90-9f5edaa4f18b/resourceGroups/ExDGrowthCommercialCopilot/providers/microsoft.insights/components/copilotanalytix-appinsights"
+  ],
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

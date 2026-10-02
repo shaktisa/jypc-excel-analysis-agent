@@ -1,0 +1,12 @@
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+exclude = [".venv", "app/static"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = ["B008", "E402"]
+
+[tool.ruff.lint.per-file-ignores]
+"app/excel_tools.py" = ["E501"]
+"tests/*" = ["E501"]
